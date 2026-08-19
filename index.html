@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GPA Ledger — Sign In</title>
+
+<script>
+  window.__FIREBASE_CONFIG__ = {
+  apiKey: "AIzaSyBxQdXRh1e5_56SHHNM2GAlyBKbFD98J-c",
+  authDomain: "gpa-calculator-11f9a.firebaseapp.com",
+  databaseURL: "https://gpa-calculator-11f9a-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "gpa-calculator-11f9a",
+  storageBucket: "gpa-calculator-11f9a.firebasestorage.app",
+  messagingSenderId: "203065200237",
+  appId: "1:203065200237:web:f81245fbf56f0926b4f964"
+};
+</script>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ink: "#101826",
+          paper: "#FAF8F3",
+          brass: { DEFAULT: "#A6802D", dark: "#8A6A22", light: "#C9A85C" },
+          forest: "#3F6B4F",
+          rust: "#9C3B3B",
+          slate: {
+            50: "#F4F5F6",
+            100: "#E7E9EC",
+            200: "#D7DAE0",
+            400: "#8A93A1",
+            500: "#6B7480",
+            600: "#525A66",
+            700: "#3B4048",
+            800: "#232B36",
+            900: "#171D26"
+          }
+        },
+        fontFamily: {
+          display: ["Fraunces", "serif"],
+          body: ["Inter", "sans-serif"],
+          mono: ["IBM Plex Mono", "monospace"]
+        }
+      }
+    }
+  };
+</script>
+
+<link rel="stylesheet" href="style.css" />
+</head>
+<body data-auth-ready="false" class="font-body bg-paper text-slate-800 antialiased">
+
+<!-- Full-page loader shown until Firebase resolves the auth session -->
+<div id="route-loading-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-paper">
+  <div class="spinner"></div>
+</div>
+
+<div class="auth-guarded min-h-screen grid lg:grid-cols-2">
+
+  <!-- Left: brand / hero panel -->
+  <div class="hidden lg:flex ink-panel flex-col justify-between p-12 text-paper">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-md bg-brass flex items-center justify-center font-display font-semibold text-ink">Σ</div>
+      <span class="font-display text-lg tracking-wide">GPA Ledger</span>
+    </div>
+
+    <div class="max-w-md">
+      <p class="font-mono text-xs uppercase tracking-[0.2em] text-brass-light mb-4">Your Academic Command Center</p>
+      <h1 class="font-display text-4xl leading-tight mb-4">Every subject,<br />weighted right.</h1>
+      <p class="text-slate-400 leading-relaxed">
+        Log each course once — by score or by letter — and your GPA updates
+        itself. Organize by semester and period, forecast graduation, and
+        track trends, all in one ledger.
+      </p>
+    </div>
+
+    <p class="text-xs text-slate-500 font-mono">Secured per account · Firebase Authentication</p>
+  </div>
+
+  <!-- Right: auth card -->
+  <div class="flex items-center justify-center p-6 sm:p-10">
+    <div class="w-full max-w-sm">
+
+      <div class="lg:hidden flex items-center gap-2 mb-8 justify-center">
+        <div class="w-8 h-8 rounded-md bg-brass flex items-center justify-center font-display font-semibold text-ink">Σ</div>
+        <span class="font-display text-lg tracking-wide text-ink">GPA Ledger</span>
+      </div>
+
+      <div class="glass-card rounded-2xl p-8 shadow-xl shadow-slate-900/5">
+
+        <div role="tablist" class="flex gap-6 border-b border-slate-200 mb-6">
+          <button id="tab-signin" type="button" role="tab" aria-selected="true" class="auth-tab auth-tab-active pb-3 text-sm font-medium text-slate-500">Sign in</button>
+          <button id="tab-signup" type="button" role="tab" aria-selected="false" class="auth-tab pb-3 text-sm font-medium text-slate-500">Create account</button>
+        </div>
+
+        <div id="auth-error" class="hidden mb-4 rounded-lg border border-rust/30 bg-rust/5 px-3 py-2 text-sm text-rust" role="alert"></div>
+
+        <!-- Sign in -->
+        <div id="panel-signin">
+          <form id="signin-form" class="space-y-4" novalidate>
+            <div>
+              <label for="signin-email" class="block text-xs font-medium text-slate-600 mb-1">Email</label>
+              <input id="signin-email" type="email" autocomplete="email" required
+                class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm bg-white" placeholder="you@campus.edu" />
+            </div>
+            <div>
+              <label for="signin-password" class="block text-xs font-medium text-slate-600 mb-1">Password</label>
+              <input id="signin-password" type="password" autocomplete="current-password" required
+                class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm bg-white" placeholder="••••••••" />
+            </div>
+            <button type="submit" class="w-full rounded-lg bg-ink text-paper text-sm font-medium py-2.5 hover:bg-slate-900 transition-colors">
+              Sign in
+            </button>
+          </form>
+        </div>
+
+        <!-- Sign up -->
+        <div id="panel-signup" class="hidden">
+          <form id="signup-form" class="space-y-4" novalidate>
+            <div>
+              <label for="signup-name" class="block text-xs font-medium text-slate-600 mb-1">Full name</label>
+              <input id="signup-name" type="text" autocomplete="name" required
+                class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm bg-white" placeholder="Jordan Lee" />
+            </div>
+            <div>
+              <label for="signup-email" class="block text-xs font-medium text-slate-600 mb-1">Email</label>
+              <input id="signup-email" type="email" autocomplete="email" required
+                class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm bg-white" placeholder="you@campus.edu" />
+            </div>
+            <div>
+              <label for="signup-password" class="block text-xs font-medium text-slate-600 mb-1">Password</label>
+              <input id="signup-password" type="password" autocomplete="new-password" required minlength="6"
+                class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm bg-white" placeholder="At least 6 characters" />
+            </div>
+            <div>
+              <label for="signup-confirm-password" class="block text-xs font-medium text-slate-600 mb-1">Confirm password</label>
+              <input id="signup-confirm-password" type="password" autocomplete="new-password" required minlength="6"
+                class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm bg-white" placeholder="Repeat password" />
+            </div>
+            <button type="submit" class="w-full rounded-lg bg-brass text-ink text-sm font-medium py-2.5 hover:bg-brass-dark hover:text-paper transition-colors">
+              Create account
+            </button>
+          </form>
+        </div>
+
+      </div>
+
+      <p class="text-center text-xs text-slate-400 mt-6">Your records are private — only you can see your own courses.</p>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="firebase-config.js"></script>
+<script type="module" src="auth.js"></script>
+</body>
+</html>

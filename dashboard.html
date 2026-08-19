@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GPA Ledger — Command Center</title>
+
+<script>
+  window.__FIREBASE_CONFIG__ = {
+  apiKey: "AIzaSyBxQdXRh1e5_56SHHNM2GAlyBKbFD98J-c",
+  authDomain: "gpa-calculator-11f9a.firebaseapp.com",
+  databaseURL: "https://gpa-calculator-11f9a-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "gpa-calculator-11f9a",
+  storageBucket: "gpa-calculator-11f9a.firebasestorage.app",
+  messagingSenderId: "203065200237",
+  appId: "1:203065200237:web:f81245fbf56f0926b4f964"
+};
+</script>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ink: "#101826",
+          paper: "#FAF8F3",
+          brass: { DEFAULT: "#A6802D", dark: "#8A6A22", light: "#C9A85C" },
+          forest: "#3F6B4F",
+          rust: "#9C3B3B",
+          slate: {
+            50: "#F4F5F6",
+            100: "#E7E9EC",
+            200: "#D7DAE0",
+            400: "#8A93A1",
+            500: "#6B7480",
+            600: "#525A66",
+            700: "#3B4048",
+            800: "#232B36",
+            900: "#171D26"
+          }
+        },
+        fontFamily: {
+          display: ["Fraunces", "serif"],
+          body: ["Inter", "sans-serif"],
+          mono: ["IBM Plex Mono", "monospace"]
+        }
+      }
+    }
+  };
+</script>
+
+<!-- Chart.js for the GPA trend line and grade distribution donut -->
+<script src="vendor/chart.umd.min.js"></script>
+
+<link rel="stylesheet" href="style.css" />
+</head>
+<body data-auth-ready="false" class="font-body bg-paper text-slate-800 antialiased">
+
+<!-- Full-page loader shown until Firebase resolves the auth session -->
+<div id="route-loading-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-paper">
+  <div class="spinner"></div>
+</div>
+
+<div class="auth-guarded min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-ink text-paper">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-md bg-brass flex items-center justify-center font-display font-semibold text-ink">Σ</div>
+        <div class="leading-tight">
+          <span class="font-display text-lg tracking-wide block">GPA Ledger</span>
+          <span class="hidden sm:block font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400">Academic Command Center</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <span id="user-email" class="hidden sm:inline text-sm text-slate-400 font-mono"></span>
+        <button id="logout-btn" type="button" class="text-sm font-medium text-paper/90 hover:text-paper border border-white/15 hover:border-white/30 rounded-lg px-3 py-1.5 transition-colors">
+          Sign out
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+
+    <!-- Cumulative metrics -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div class="metric-card rounded-2xl p-5">
+        <p class="text-xs font-medium text-slate-500 mb-2">Total Subjects</p>
+        <p id="metric-total-courses" class="font-display text-3xl text-ink">0</p>
+        <p id="metric-total-breakdown" class="text-[11px] text-slate-400 font-mono mt-1">0 completed · 0 planned</p>
+      </div>
+      <div class="metric-card rounded-2xl p-5">
+        <p class="text-xs font-medium text-slate-500 mb-2">SKS Total</p>
+        <p id="metric-sks-total" class="font-mono text-3xl text-ink">0</p>
+      </div>
+      <div class="metric-card rounded-2xl p-5">
+        <p class="text-xs font-medium text-slate-500 mb-2">SKS × Index Total</p>
+        <p id="metric-product-total" class="font-mono text-3xl text-ink">0.00</p>
+      </div>
+      <div class="metric-card rounded-2xl p-5">
+        <div class="flex items-start justify-between gap-2 mb-2">
+          <p class="text-xs font-medium text-slate-500">Cumulative GPA</p>
+        </div>
+        <p id="metric-ipk" class="font-mono text-3xl text-brass-dark font-semibold">0.00</p>
+        <label class="mt-2 flex items-center gap-1.5 text-[11px] text-slate-400 cursor-pointer select-none">
+          <input id="include-planned-toggle" type="checkbox" class="toggle-checkbox" />
+          Include planned courses
+        </label>
+      </div>
+    </section>
+
+    <!-- Forecasting: Target GPA simulator + grade distribution -->
+    <section class="grid lg:grid-cols-5 gap-4 mb-4">
+
+      <!-- Target GPA Simulator -->
+      <div class="lg:col-span-3 metric-card rounded-2xl p-6">
+        <div class="flex items-center gap-2 mb-1">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-brass-dark"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+          <h2 class="font-display text-lg text-ink">Target GPA Simulator</h2>
+        </div>
+        <p class="text-xs text-slate-500 mb-4">Solve for the average index you need across your remaining SKS to graduate at your goal GPA.</p>
+
+        <div class="grid sm:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label for="sim-target-ipk" class="block text-xs font-medium text-slate-600 mb-1">Goal cumulative GPA</label>
+            <input id="sim-target-ipk" type="number" min="0" max="4" step="0.01" placeholder="e.g. 3.80"
+              class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-mono" />
+          </div>
+          <div>
+            <label for="sim-remaining-sks" class="block text-xs font-medium text-slate-600 mb-1">
+              Remaining SKS
+              <span class="text-slate-400 font-normal">(auto-filled from planned courses)</span>
+            </label>
+            <input id="sim-remaining-sks" type="number" min="0" step="0.5" placeholder="e.g. 45"
+              class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-mono" />
+          </div>
+        </div>
+
+        <div id="sim-result" class="rounded-xl border border-brass/25 bg-brass/5 px-4 py-3">
+          <p id="sim-result-text" class="text-sm text-slate-700 leading-relaxed">
+            Enter a goal GPA to see the average index you'll need across your remaining coursework.
+          </p>
+        </div>
+      </div>
+
+      <!-- Grade distribution donut -->
+      <div class="lg:col-span-2 metric-card rounded-2xl p-6 flex flex-col">
+        <h2 class="font-display text-lg text-ink mb-1">Grade Distribution Breakdown</h2>
+        <p class="text-xs text-slate-500 mb-3">Across every included subject in your transcript.</p>
+        <div class="flex-1 min-h-[180px] relative">
+          <canvas id="grade-distribution-chart"></canvas>
+        </div>
+        <p id="distribution-empty" class="hidden text-center text-xs text-slate-400 py-8">Add subjects to see your distribution.</p>
+      </div>
+    </section>
+
+    <!-- GPA trend -->
+    <section class="metric-card rounded-2xl p-6 mb-8">
+      <div class="flex items-center justify-between mb-1">
+        <h2 class="font-display text-lg text-ink">GPA Progression Graph</h2>
+        <span class="text-[11px] font-mono text-slate-400 uppercase tracking-wide">Completed blocks</span>
+      </div>
+      <p class="text-xs text-slate-500 mb-3">Block GPA and cumulative GPA across every completed semester / period block.</p>
+      <div class="h-64 relative">
+        <canvas id="ipk-trend-chart"></canvas>
+      </div>
+      <p id="trend-empty" class="hidden text-center text-xs text-slate-400 py-10">Complete at least one block to see your trend line.</p>
+    </section>
+
+    <!-- Toolbar: search / filter / actions -->
+    <section class="flex flex-col gap-3 mb-4">
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div class="relative w-full sm:max-w-xs">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+          <input id="search-input" type="text" placeholder="Search subjects…"
+            class="form-input w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2.5 text-sm" />
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <input id="csv-file-input" type="file" accept=".csv" class="hidden" />
+          <button id="csv-import-btn" type="button" class="toolbar-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            Import CSV
+          </button>
+          <button id="csv-export-btn" type="button" class="toolbar-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+            Export CSV
+          </button>
+          <button id="add-course-btn" type="button" class="inline-flex items-center justify-center gap-2 rounded-lg bg-brass text-ink text-sm font-medium px-4 py-2.5 hover:bg-brass-dark hover:text-paper transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            Add subject
+          </button>
+        </div>
+      </div>
+
+      <!-- Multi-tier filter bar -->
+      <div class="flex flex-wrap items-center gap-2 filter-bar rounded-xl px-3 py-2.5">
+        <span class="text-[11px] font-mono uppercase tracking-wide text-slate-400 mr-1">Filter</span>
+        <select id="filter-grade" class="filter-select">
+          <option value="all">All grades</option>
+          <option value="a-only">A's only</option>
+          <option value="a-minus-up">A- and above</option>
+          <option value="b-plus-up">B+ and above</option>
+          <option value="below-3">Below 3.0 index</option>
+          <option value="below-2">Below 2.0 index</option>
+        </select>
+        <select id="filter-credits" class="filter-select">
+          <option value="all">Any credits</option>
+        </select>
+        <select id="filter-type" class="filter-select">
+          <option value="all">Completed &amp; planned</option>
+          <option value="completed">Completed only</option>
+          <option value="planned">Planned only</option>
+        </select>
+        <button id="filter-reset-btn" type="button" class="text-xs text-slate-400 hover:text-rust font-medium ml-auto">Reset filters</button>
+      </div>
+    </section>
+
+    <!-- Loading state -->
+    <div id="loading-state" class="flex flex-col items-center justify-center py-20 gap-3">
+      <div class="spinner"></div>
+      <p class="text-sm text-slate-400">Loading your transcript…</p>
+    </div>
+
+    <!-- Empty state -->
+    <div id="empty-state" class="hidden flex flex-col items-center justify-center text-center py-20 border border-dashed border-slate-200 rounded-2xl bg-white/60">
+      <div class="w-12 h-12 rounded-full bg-brass/10 flex items-center justify-center mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 text-brass-dark"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </div>
+      <p class="font-display text-lg text-ink mb-1">No subjects yet</p>
+      <p class="text-sm text-slate-500 max-w-xs">Add your first subject — completed or planned — to start building your transcript and forecasting your GPA.</p>
+    </div>
+
+    <!-- No results after filtering -->
+    <div id="no-results-state" class="hidden flex flex-col items-center justify-center text-center py-16 border border-dashed border-slate-200 rounded-2xl bg-white/60">
+      <p class="font-display text-base text-ink mb-1">No subjects match your filters</p>
+      <p class="text-sm text-slate-500">Try adjusting search, grade range, credits, or type.</p>
+    </div>
+
+    <!-- Semester / Period blocks render here -->
+    <div id="semester-groups"></div>
+
+  </main>
+</div>
+
+<!-- Course modal (add / edit) -->
+<div id="course-modal" class="hidden fixed inset-0 z-50">
+  <div class="modal-backdrop absolute inset-0"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div class="modal-panel glass-card w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="course-modal-title">
+      <div class="flex items-center justify-between mb-5">
+        <h2 id="course-modal-title" class="font-display text-xl text-ink">Add subject</h2>
+        <button id="course-modal-close" type="button" class="icon-btn" aria-label="Close">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+
+      <form id="course-form" novalidate>
+        <input type="hidden" id="course-id" />
+
+        <!-- Planned course toggle -->
+        <label class="flex items-start gap-3 mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 cursor-pointer select-none">
+          <input id="is-hypothetical" type="checkbox" class="toggle-checkbox mt-0.5" />
+          <span>
+            <span class="block text-sm font-medium text-ink">This is a planned / future course</span>
+            <span class="block text-xs text-slate-500">Not completed yet — enter a target grade instead of a final one. You can toggle it in or out of your GPA calculation later.</span>
+          </span>
+        </label>
+
+        <!-- Semester + Period block -->
+        <div class="mb-4">
+          <label for="course-semester-number" class="block text-xs font-medium text-slate-600 mb-1">Semester</label>
+          <input id="course-semester-number" type="number" min="1" step="1" placeholder="e.g. 1"
+            class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-mono" />
+
+          <p id="period-compact-note" class="hidden mt-2 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-500"></p>
+
+          <div id="period-select-wrapper" class="hidden mt-2">
+            <label for="course-period" class="block text-xs font-medium text-slate-600 mb-1">Period</label>
+            <select id="course-period" class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm">
+              <option value="A">Period A</option>
+              <option value="B">Period B</option>
+            </select>
+          </div>
+
+          <label id="period-flex-wrapper" class="hidden mt-2 flex items-center gap-2 text-xs text-slate-500 cursor-pointer select-none">
+            <input id="period-flex-toggle" type="checkbox" class="toggle-checkbox" />
+            Split this semester into Period A / Period B
+          </label>
+        </div>
+        <p id="course-semester-error" class="hidden -mt-3 mb-3 text-xs text-rust"></p>
+
+        <div class="grid grid-cols-3 gap-3 mb-4">
+          <div class="col-span-1">
+            <label for="subject-code" class="block text-xs font-medium text-slate-600 mb-1">Code <span class="text-slate-400 font-normal">(optional)</span></label>
+            <input id="subject-code" type="text" class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-mono" placeholder="MTH201" />
+          </div>
+          <div class="col-span-2">
+            <label for="subject-name" class="block text-xs font-medium text-slate-600 mb-1">Subject name</label>
+            <input id="subject-name" type="text" class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" placeholder="e.g. Linear Algebra" />
+          </div>
+        </div>
+        <p id="subject-name-error" class="hidden -mt-3 mb-3 text-xs text-rust"></p>
+
+        <div class="mb-4">
+          <label for="credits-input" class="block text-xs font-medium text-slate-600 mb-1">Credits (SKS)</label>
+          <input id="credits-input" type="number" min="1" step="1" class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" placeholder="e.g. 3" />
+          <p id="credits-error" class="hidden mt-1 text-xs text-rust"></p>
+        </div>
+
+        <div class="mb-1">
+          <label for="grade-input" id="grade-input-label" class="block text-xs font-medium text-slate-600 mb-1">Grade</label>
+          <input id="grade-input" type="text" class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-mono" placeholder="91 or A-" />
+          <p id="grade-error" class="hidden mt-1 text-xs text-rust"></p>
+          <p id="grade-help-text" class="mt-1.5 text-xs text-slate-400">Enter a score from 0–100, or a letter grade (A, A-, B+, B, B-, C+, C, F).</p>
+        </div>
+
+        <div class="mt-6 flex items-center justify-end gap-3">
+          <button id="course-modal-cancel" type="button" class="px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700">Cancel</button>
+          <button id="course-modal-save" type="submit" class="px-4 py-2 rounded-lg bg-ink text-paper text-sm font-medium hover:bg-slate-900 transition-colors">Add subject</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirmation modal -->
+<div id="delete-modal" class="hidden fixed inset-0 z-50">
+  <div class="modal-backdrop absolute inset-0"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div class="modal-panel glass-card w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+      <div class="flex items-center justify-between mb-4">
+        <h2 id="delete-modal-title" class="font-display text-lg text-ink">Delete subject?</h2>
+        <button id="delete-modal-close" type="button" class="icon-btn" aria-label="Close">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <p class="text-sm text-slate-600 mb-6">
+        This will remove <span id="delete-modal-name" class="font-medium text-slate-800"></span> from your transcript. This can't be undone.
+      </p>
+      <div class="flex items-center justify-end gap-3">
+        <button id="delete-cancel-btn" type="button" class="px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700">Cancel</button>
+        <button id="delete-confirm-btn" type="button" class="px-4 py-2 rounded-lg bg-rust text-white text-sm font-medium hover:bg-rust/90 transition-colors">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CSV import modal -->
+<div id="csv-modal" class="hidden fixed inset-0 z-50">
+  <div class="modal-backdrop absolute inset-0"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div class="modal-panel glass-card w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="csv-modal-title">
+      <div class="flex items-center justify-between mb-4">
+        <h2 id="csv-modal-title" class="font-display text-lg text-ink">Import CSV</h2>
+        <button id="csv-modal-close" type="button" class="icon-btn" aria-label="Close">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <p class="text-sm text-slate-600 mb-3">
+        File: <span id="csv-file-name" class="font-mono text-xs text-slate-500">none selected</span>
+      </p>
+      <div id="csv-preview" class="max-h-64 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-mono text-slate-600 mb-3 whitespace-pre-wrap"></div>
+      <div id="csv-errors" class="hidden mb-3 rounded-lg border border-rust/30 bg-rust/5 px-3 py-2 text-xs text-rust max-h-32 overflow-auto"></div>
+      <p class="text-xs text-slate-400 mb-4">Expected columns: Semester, Period (A/B — leave blank for Compact Semesters 3 &amp; 6), Code, Subject Name, Credits, Grade, Type (Completed/Planned). Header row required — export a CSV first to see the exact format.</p>
+      <div class="flex items-center justify-end gap-3">
+        <button id="csv-cancel-btn" type="button" class="px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700">Cancel</button>
+        <button id="csv-confirm-btn" type="button" disabled class="px-4 py-2 rounded-lg bg-brass text-ink text-sm font-medium hover:bg-brass-dark hover:text-paper transition-colors disabled:opacity-40 disabled:pointer-events-none">Import rows</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Course detail drawer -->
+<div id="detail-drawer" class="hidden fixed inset-0 z-50">
+  <div class="modal-backdrop absolute inset-0"></div>
+  <div class="drawer-panel absolute top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl flex flex-col">
+    <div class="flex items-start justify-between px-6 py-5 border-b border-slate-100">
+      <div>
+        <p id="drawer-subject-code" class="font-mono text-xs text-brass-dark mb-0.5"></p>
+        <h2 id="drawer-subject-name" class="font-display text-xl text-ink leading-tight"></h2>
+        <p id="drawer-meta" class="text-xs text-slate-400 mt-1"></p>
+      </div>
+      <button id="drawer-close" type="button" class="icon-btn" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+      <div>
+        <label for="drawer-professor" class="block text-xs font-medium text-slate-600 mb-1">Professor</label>
+        <input id="drawer-professor" type="text" class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" placeholder="e.g. Dr. Amara Sitompul" />
+      </div>
+      <div>
+        <label for="drawer-office-hours" class="block text-xs font-medium text-slate-600 mb-1">Office hours</label>
+        <input id="drawer-office-hours" type="text" class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" placeholder="e.g. Tue/Thu 2–4pm, Room 3.12" />
+      </div>
+      <div>
+        <label for="drawer-syllabus" class="block text-xs font-medium text-slate-600 mb-1">Syllabus link</label>
+        <input id="drawer-syllabus" type="url" class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" placeholder="https://…" />
+      </div>
+      <div>
+        <label for="drawer-notes" class="block text-xs font-medium text-slate-600 mb-1">Study notes</label>
+        <textarea id="drawer-notes" rows="8" class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm resize-none" placeholder="Key topics, exam tips, reminders…"></textarea>
+      </div>
+    </div>
+    <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3">
+      <button id="drawer-cancel" type="button" class="px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700">Close</button>
+      <button id="drawer-save" type="button" class="px-4 py-2 rounded-lg bg-ink text-paper text-sm font-medium hover:bg-slate-900 transition-colors">Save notes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] rounded-lg bg-ink text-paper text-sm px-4 py-2.5 shadow-xl"></div>
+
+<script type="module" src="firebase-config.js"></script>
+<script type="module" src="auth.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

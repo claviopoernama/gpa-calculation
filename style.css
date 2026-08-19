@@ -1,0 +1,495 @@
+/* style.css
+   Custom fonts, small utilities, and component styling that Tailwind's
+   CDN build doesn't cover on its own: fonts, scrollbars, modal/drawer
+   transitions, grade badges, semester/period cards, filter bar, charts,
+   and the ledger-style table treatment. */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --ink: #101826;
+  --paper: #faf8f3;
+  --brass: #a6802d;
+  --brass-dark: #8a6a22;
+  --forest: #3f6b4f;
+  --amber: #b8873a;
+  --rust: #9c3b3b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: "Inter", sans-serif;
+  background-color: var(--paper);
+}
+
+.font-display {
+  font-family: "Fraunces", serif;
+}
+
+.font-mono {
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hide the guarded content behind a full-screen loader until Firebase
+   resolves the auth state, to avoid a flash of the wrong screen. */
+body[data-auth-ready="false"] .auth-guarded {
+  visibility: hidden;
+}
+
+/* ------------------------------------------------------------------ */
+/* Scrollbars                                                          */
+/* ------------------------------------------------------------------ */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(16, 24, 38, 0.18);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(16, 24, 38, 0.32);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(16, 24, 38, 0.25) transparent;
+}
+
+/* ------------------------------------------------------------------ */
+/* Auth tabs                                                           */
+/* ------------------------------------------------------------------ */
+
+.auth-tab {
+  position: relative;
+  transition: color 0.2s ease;
+}
+
+.auth-tab-active {
+  color: var(--ink);
+}
+
+.auth-tab-active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background-color: var(--brass);
+  border-radius: 999px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Glassmorphism cards / panels                                        */
+/* ------------------------------------------------------------------ */
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.ink-panel {
+  background: radial-gradient(120% 140% at 0% 0%, #1b2740 0%, var(--ink) 60%);
+}
+
+/* ------------------------------------------------------------------ */
+/* Metric cards                                                        */
+/* ------------------------------------------------------------------ */
+
+.metric-card {
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid rgba(16, 24, 38, 0.08);
+  box-shadow: 0 1px 2px rgba(16, 24, 38, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(16, 24, 38, 0.08);
+}
+
+.metric-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--brass), transparent);
+}
+
+/* ------------------------------------------------------------------ */
+/* Toolbar buttons                                                     */
+/* ------------------------------------------------------------------ */
+
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(16, 24, 38, 0.12);
+  background: #ffffff;
+  color: #3b4048;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 0.5rem 0.85rem;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.toolbar-btn:hover {
+  background-color: rgba(166, 128, 45, 0.08);
+  border-color: rgba(166, 128, 45, 0.35);
+  color: var(--brass-dark);
+}
+
+/* ------------------------------------------------------------------ */
+/* Filter bar                                                          */
+/* ------------------------------------------------------------------ */
+
+.filter-bar {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(16, 24, 38, 0.08);
+}
+
+.filter-select {
+  background: #ffffff;
+  border: 1px solid rgba(16, 24, 38, 0.12);
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.75rem;
+  color: #3b4048;
+  transition: border-color 0.15s ease;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: var(--brass);
+}
+
+/* ------------------------------------------------------------------ */
+/* Toggle checkboxes                                                    */
+/* ------------------------------------------------------------------ */
+
+.toggle-checkbox {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--brass);
+  cursor: pointer;
+}
+
+.include-checkbox {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--forest);
+  cursor: pointer;
+}
+
+.include-checkbox:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* ------------------------------------------------------------------ */
+/* Semester / period blocks                                            */
+/* ------------------------------------------------------------------ */
+
+.semester-card {
+  box-shadow: 0 1px 2px rgba(16, 24, 38, 0.04);
+}
+
+.semester-header {
+  background: #ffffff;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.semester-header:hover {
+  background-color: rgba(166, 128, 45, 0.05);
+}
+
+.semester-ips {
+  font-weight: 600;
+  color: var(--brass-dark);
+}
+
+.semester-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.semester-badge-done {
+  background-color: rgba(63, 107, 79, 0.14);
+  color: var(--forest);
+}
+
+.semester-badge-planned {
+  background-color: rgba(166, 128, 45, 0.14);
+  color: var(--brass-dark);
+}
+
+.semester-badge-mixed {
+  background-color: rgba(156, 59, 59, 0.12);
+  color: var(--rust);
+}
+
+.chevron {
+  transition: transform 0.18s ease;
+}
+
+.chevron-collapsed {
+  transform: rotate(-90deg);
+}
+
+.planned-pill {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background-color: rgba(166, 128, 45, 0.14);
+  color: var(--brass-dark);
+  vertical-align: middle;
+}
+
+/* ------------------------------------------------------------------ */
+/* Table / ledger                                                      */
+/* ------------------------------------------------------------------ */
+
+.ledger-row {
+  transition: background-color 0.15s ease;
+  border-bottom: 1px solid rgba(16, 24, 38, 0.06);
+  cursor: pointer;
+}
+
+.ledger-row:hover {
+  background-color: rgba(166, 128, 45, 0.06);
+}
+
+.ledger-row-excluded {
+  opacity: 0.45;
+}
+
+.grade-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+.grade-badge-a {
+  background-color: rgba(166, 128, 45, 0.14);
+  color: var(--brass-dark);
+}
+
+.grade-badge-b {
+  background-color: rgba(63, 107, 79, 0.14);
+  color: var(--forest);
+}
+
+.grade-badge-c {
+  background-color: rgba(184, 135, 58, 0.16);
+  color: var(--amber);
+}
+
+.grade-badge-d {
+  background-color: rgba(156, 59, 59, 0.14);
+  color: var(--rust);
+}
+
+.sort-arrow {
+  font-size: 0.6rem;
+  margin-left: 0.25rem;
+  transition: opacity 0.15s ease;
+}
+
+/* ------------------------------------------------------------------ */
+/* Icon buttons                                                        */
+/* ------------------------------------------------------------------ */
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  color: #6b7280;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.icon-btn-edit:hover {
+  background-color: rgba(166, 128, 45, 0.12);
+  color: var(--brass-dark);
+}
+
+.icon-btn-delete:hover {
+  background-color: rgba(156, 59, 59, 0.12);
+  color: var(--rust);
+}
+
+/* ------------------------------------------------------------------ */
+/* Modals                                                              */
+/* ------------------------------------------------------------------ */
+
+body.modal-open {
+  overflow: hidden;
+}
+
+.modal-backdrop {
+  background-color: rgba(16, 24, 38, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.modal-panel {
+  transform: translateY(12px) scale(0.98);
+  opacity: 0;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.modal-visible .modal-backdrop {
+  opacity: 1;
+}
+
+.modal-visible .modal-panel {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Slide-over drawer                                                   */
+/* ------------------------------------------------------------------ */
+
+.drawer-panel {
+  transform: translateX(100%);
+  transition: transform 0.22s ease;
+}
+
+.modal-visible .drawer-panel {
+  transform: translateX(0);
+}
+
+/* ------------------------------------------------------------------ */
+/* Form fields                                                         */
+/* ------------------------------------------------------------------ */
+
+.form-input {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--brass);
+  box-shadow: 0 0 0 3px rgba(166, 128, 45, 0.15);
+}
+
+.input-invalid {
+  border-color: var(--rust) !important;
+}
+
+.input-invalid:focus {
+  box-shadow: 0 0 0 3px rgba(156, 59, 59, 0.15) !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Loading spinner                                                     */
+/* ------------------------------------------------------------------ */
+
+.spinner {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 3px solid rgba(16, 24, 38, 0.12);
+  border-top-color: var(--brass);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Toast                                                               */
+/* ------------------------------------------------------------------ */
+
+#toast {
+  animation: toast-in 0.2s ease;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Focus visibility (accessibility)                                    */
+/* ------------------------------------------------------------------ */
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Reduced motion                                                      */
+/* ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
