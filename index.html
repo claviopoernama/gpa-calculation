@@ -97,7 +97,11 @@
           <button id="tab-signup" type="button" role="tab" aria-selected="false" class="auth-tab pb-3 text-sm font-medium text-slate-500">Create account</button>
         </div>
 
+        <!-- Error feedback (invalid credentials, network issues, etc.) -->
         <div id="auth-error" class="hidden mb-4 rounded-lg border border-rust/30 bg-rust/5 px-3 py-2 text-sm text-rust" role="alert"></div>
+
+        <!-- Success feedback (e.g. password reset email sent) -->
+        <div id="auth-success" class="hidden mb-4 rounded-lg border border-forest/30 bg-forest/5 px-3 py-2 text-sm text-forest" role="status"></div>
 
         <!-- Sign in -->
         <div id="panel-signin">
@@ -108,7 +112,12 @@
                 class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm bg-white" placeholder="you@campus.edu" />
             </div>
             <div>
-              <label for="signin-password" class="block text-xs font-medium text-slate-600 mb-1">Password</label>
+              <div class="flex items-center justify-between mb-1">
+                <label for="signin-password" class="block text-xs font-medium text-slate-600">Password</label>
+                <button id="forgot-password-link" type="button" class="text-xs font-medium text-brass-dark hover:text-brass hover:underline">
+                  Forgot password?
+                </button>
+              </div>
               <input id="signin-password" type="password" autocomplete="current-password" required
                 class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm bg-white" placeholder="••••••••" />
             </div>
@@ -143,6 +152,25 @@
             </div>
             <button type="submit" class="w-full rounded-lg bg-brass text-ink text-sm font-medium py-2.5 hover:bg-brass-dark hover:text-paper transition-colors">
               Create account
+            </button>
+          </form>
+        </div>
+
+        <!-- Forgot password -->
+        <div id="panel-forgot" class="hidden">
+          <h2 class="font-display text-lg text-ink mb-1">Reset your password</h2>
+          <p class="text-xs text-slate-500 mb-5">Enter the email on your account and we'll send you a reset link.</p>
+          <form id="forgot-password-form" class="space-y-4" novalidate>
+            <div>
+              <label for="forgot-email" class="block text-xs font-medium text-slate-600 mb-1">Email</label>
+              <input id="forgot-email" type="email" autocomplete="email" required
+                class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm bg-white" placeholder="you@campus.edu" />
+            </div>
+            <button type="submit" class="w-full rounded-lg bg-ink text-paper text-sm font-medium py-2.5 hover:bg-slate-900 transition-colors">
+              Send reset link
+            </button>
+            <button id="back-to-signin-link" type="button" class="w-full text-center text-xs font-medium text-slate-500 hover:text-slate-700 pt-1">
+              ← Back to sign in
             </button>
           </form>
         </div>

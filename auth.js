@@ -2,6 +2,7 @@ import { auth } from "./firebase-config.js";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
   updateProfile,
   onAuthStateChanged,
@@ -31,6 +32,8 @@ function mapAuthError(error) {
       return "That email is already registered. Try signing in instead.";
     case "auth/invalid-email":
       return "Enter a valid email address.";
+    case "auth/missing-email":
+      return "Enter your email address.";
     case "auth/weak-password":
       return "Password must be at least 6 characters long.";
     case "auth/missing-password":
@@ -54,6 +57,12 @@ function mapAuthError(error) {
   }
 }
 
+/* ---------------------------------------------------------------------- */
+/* Feedback messages (error / success)                                     */
+/* ---------------------------------------------------------------------- */
+// Error and success feedback share the same real estate above the forms,
+// so showing one always clears the other rather than letting them stack.
+
 function showAuthError(message) {
   const errorBox = document.getElementById("auth-error");
   if (!errorBox) return;
@@ -62,8 +71,30 @@ function showAuthError(message) {
     errorBox.classList.add("hidden");
     return;
   }
+  const successBox = document.getElementById("auth-success");
+  if (successBox) {
+    successBox.textContent = "";
+    successBox.classList.add("hidden");
+  }
   errorBox.textContent = message;
   errorBox.classList.remove("hidden");
+}
+
+function showAuthSuccess(message) {
+  const successBox = document.getElementById("auth-success");
+  if (!successBox) return;
+  if (!message) {
+    successBox.textContent = "";
+    successBox.classList.add("hidden");
+    return;
+  }
+  const errorBox = document.getElementById("auth-error");
+  if (errorBox) {
+    errorBox.textContent = "";
+    errorBox.classList.add("hidden");
+  }
+  successBox.textContent = message;
+  successBox.classList.remove("hidden");
 }
 
 function setButtonLoading(button, isLoading, loadingText) {
@@ -104,6 +135,7 @@ function initTabs() {
     panelSignUp.classList.toggle("hidden", isSignIn);
 
     showAuthError("");
+    showAuthSuccess("");
   }
 
   tabSignIn.addEventListener("click", () => activate("signin"));
@@ -121,6 +153,7 @@ function initSignInForm() {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     showAuthError("");
+    showAuthSuccess("");
 
     const email = form.querySelector("#signin-email").value.trim();
     const password = form.querySelector("#signin-password").value;
@@ -151,6 +184,7 @@ function initSignUpForm() {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     showAuthError("");
+    showAuthSuccess("");
 
     const name = form.querySelector("#signup-name").value.trim();
     const email = form.querySelector("#signup-email").value.trim();
@@ -207,6 +241,85 @@ function initLogoutButton() {
 }
 
 /* ---------------------------------------------------------------------- */
+/* Forgot password                                                         */
+/* ---------------------------------------------------------------------- */
+
+function initForgotPassword() {
+  const tabList = document.querySelector('[role="tablist"]');
+  const panelSignIn = document.getElementById("panel-signin");
+  const panelSignUp = document.getElementById("panel-signup");
+  const panelForgot = document.getElementById("panel-forgot");
+  const forgotLink = document.getElementById("forgot-password-link");
+  const backLink = document.getElementById("back-to-signin-link");
+  const forgotForm = document.getElementById("forgot-password-form");
+
+  if (!panelForgot || !forgotLink || !backLink || !forgotForm || !panelSignIn || !panelSignUp) return;
+
+  function showForgotPanel() {
+    showAuthError("");
+    showAuthSuccess("");
+    if (tabList) tabList.classList.add("hidden");
+    panelSignIn.classList.add("hidden");
+    panelSignUp.classList.add("hidden");
+    panelForgot.classList.remove("hidden");
+    const emailInput = document.getElementById("forgot-email");
+    if (emailInput) emailInput.focus();
+  }
+
+  function showSignInPanel() {
+    showAuthError("");
+    showAuthSuccess("");
+    forgotForm.reset();
+    panelForgot.classList.add("hidden");
+    panelSignUp.classList.add("hidden");
+    panelSignIn.classList.remove("hidden");
+    if (tabList) tabList.classList.remove("hidden");
+
+    // Make sure the tab indicator agrees we're back on "Sign in".
+    const tabSignIn = document.getElementById("tab-signin");
+    const tabSignUp = document.getElementById("tab-signup");
+    if (tabSignIn && tabSignUp) {
+      tabSignIn.classList.add("auth-tab-active");
+      tabSignIn.setAttribute("aria-selected", "true");
+      tabSignUp.classList.remove("auth-tab-active");
+      tabSignUp.setAttribute("aria-selected", "false");
+    }
+  }
+
+  forgotLink.addEventListener("click", showForgotPanel);
+  backLink.addEventListener("click", showSignInPanel);
+
+  forgotForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    showAuthError("");
+    showAuthSuccess("");
+
+    const emailInput = document.getElementById("forgot-email");
+    const email = emailInput.value.trim();
+    const submitBtn = forgotForm.querySelector("button[type='submit']");
+
+    // Prevent submission outright if the field is empty — don't let
+    // Firebase round-trip just to report what we already know locally.
+    if (!email) {
+      showAuthError("Enter your email address.");
+      emailInput.focus();
+      return;
+    }
+
+    setButtonLoading(submitBtn, true, "Sending…");
+    try {
+      await sendPasswordResetEmail(auth, email);
+      showAuthSuccess("Password reset link sent to your email!");
+      forgotForm.reset();
+    } catch (error) {
+      showAuthError(mapAuthError(error));
+    } finally {
+      setButtonLoading(submitBtn, false);
+    }
+  });
+}
+
+/* ---------------------------------------------------------------------- */
 /* Route guarding                                                          */
 /* ---------------------------------------------------------------------- */
 
@@ -240,6 +353,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initSignInForm();
   initSignUpForm();
   initLogoutButton();
+  initForgotPassword();
   initAuthRouting();
 });
 

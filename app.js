@@ -37,15 +37,18 @@ const LETTER_INDEX_MAP = GRADE_SCALE.reduce((map, entry) => {
 
 const VALID_LETTERS = GRADE_SCALE.map((entry) => entry.letter);
 
+// Vibrant, mutually-distinct palette — each grade gets its own hue rather
+// than a shade of the same color, so segments stay readable at a glance
+// even in a dense distribution with several grades represented.
 const GRADE_COLORS = {
-  A: "#A6802D",
-  "A-": "#C9A85C",
-  "B+": "#3F6B4F",
-  B: "#5C8A6E",
-  "B-": "#8FB39C",
-  "C+": "#B8873A",
-  C: "#D2A868",
-  F: "#9C3B3B",
+  A: "#10B981", // Emerald Green
+  "A-": "#2563EB", // Royal Blue
+  "B+": "#F59E0B", // Amber Gold
+  B: "#F43F5E", // Coral Red
+  "B-": "#7C3AED", // Deep Purple
+  "C+": "#06B6D4", // Cyan/Teal
+  C: "#DB2777", // Magenta/Pink
+  F: "#475569", // Slate/Charcoal
 };
 
 function numberToGrade(score) {
@@ -1031,8 +1034,13 @@ function renderDistributionChart() {
         {
           data: activeLetters.map((l) => counts[l]),
           backgroundColor: activeLetters.map((l) => GRADE_COLORS[l] || "#8A93A1"),
+          // A visible paper-colored gap between segments keeps adjacent
+          // high-saturation colors from bleeding into each other.
           borderColor: "#FAF8F3",
-          borderWidth: 2,
+          borderWidth: 3,
+          hoverBorderColor: "#FFFFFF",
+          hoverBorderWidth: 3,
+          hoverOffset: 8,
         },
       ],
     },
