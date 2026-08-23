@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>GPA Ledger — Command Center</title>
+<title>GPA Calculator — Dashboard</title>
 
 <script>
   window.__FIREBASE_CONFIG__ = {
@@ -50,27 +50,26 @@
   };
 </script>
 
-<!-- Chart.js for the GPA trend line and grade distribution donut -->
-<script src="vendor/chart.umd.min.js"></script>
+<script src="chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 
 <link rel="stylesheet" href="style.css" />
 </head>
 <body data-auth-ready="false" class="font-body bg-paper text-slate-800 antialiased">
 
-<!-- Full-page loader shown until Firebase resolves the auth session -->
 <div id="route-loading-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-paper">
   <div class="spinner"></div>
 </div>
 
 <div class="auth-guarded min-h-screen">
 
-  <!-- Header -->
   <header class="bg-ink text-paper">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
       <div class="flex items-center gap-2">
         <div class="w-8 h-8 rounded-md bg-brass flex items-center justify-center font-display font-semibold text-ink">Σ</div>
         <div class="leading-tight">
-          <span class="font-display text-lg tracking-wide block">GPA Ledger</span>
+          <span class="font-display text-lg tracking-wide block">GPA Calculator</span>
           <span class="hidden sm:block font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400">Academic Command Center</span>
         </div>
       </div>
@@ -85,7 +84,6 @@
 
   <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
 
-    <!-- Cumulative metrics -->
     <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
       <div class="metric-card rounded-2xl p-5">
         <p class="text-xs font-medium text-slate-500 mb-2">Total Subjects</p>
@@ -112,16 +110,14 @@
       </div>
     </section>
 
-    <!-- Forecasting: Target GPA simulator + grade distribution -->
     <section class="grid lg:grid-cols-5 gap-4 mb-4">
 
-      <!-- Target GPA Simulator -->
       <div class="lg:col-span-3 metric-card rounded-2xl p-6">
         <div class="flex items-center gap-2 mb-1">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-brass-dark"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
           <h2 class="font-display text-lg text-ink">Target GPA Simulator</h2>
         </div>
-        <p class="text-xs text-slate-500 mb-4">Solve for the average index you need across your remaining SKS to graduate at your goal GPA.</p>
+        <p class="text-xs text-slate-500 mb-4">Uses your planned courses' real SKS to solve for the average score you need across them.</p>
 
         <div class="grid sm:grid-cols-2 gap-4 mb-4">
           <div>
@@ -130,23 +126,23 @@
               class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-mono" />
           </div>
           <div>
-            <label for="sim-remaining-sks" class="block text-xs font-medium text-slate-600 mb-1">
+            <label class="block text-xs font-medium text-slate-600 mb-1">
               Remaining SKS
-              <span class="text-slate-400 font-normal">(auto-filled from planned courses)</span>
+              <span class="text-slate-400 font-normal">(from planned courses)</span>
             </label>
-            <input id="sim-remaining-sks" type="number" min="0" step="0.5" placeholder="e.g. 45"
-              class="form-input w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-mono" />
+            <div id="sim-remaining-sks-display" class="form-input w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-mono text-slate-600">0</div>
           </div>
         </div>
 
+        <p id="sim-planned-breakdown" class="text-xs text-slate-400 mb-3"></p>
+
         <div id="sim-result" class="rounded-xl border border-brass/25 bg-brass/5 px-4 py-3">
           <p id="sim-result-text" class="text-sm text-slate-700 leading-relaxed">
-            Enter a goal GPA to see the average index you'll need across your remaining coursework.
+            Enter a goal GPA to see the minimum score you'll need across your planned courses.
           </p>
         </div>
       </div>
 
-      <!-- Grade distribution donut -->
       <div class="lg:col-span-2 metric-card rounded-2xl p-6 flex flex-col">
         <h2 class="font-display text-lg text-ink mb-1">Grade Distribution Breakdown</h2>
         <p class="text-xs text-slate-500 mb-3">Across every included subject in your transcript.</p>
@@ -157,20 +153,50 @@
       </div>
     </section>
 
-    <!-- GPA trend -->
-    <section class="metric-card rounded-2xl p-6 mb-8">
-      <div class="flex items-center justify-between mb-1">
-        <h2 class="font-display text-lg text-ink">GPA Progression Graph</h2>
-        <span class="text-[11px] font-mono text-slate-400 uppercase tracking-wide">Completed blocks</span>
+    <section class="metric-card rounded-2xl p-6 mb-4">
+      <div class="flex items-start justify-between mb-1 flex-wrap gap-3">
+        <h2 class="font-display text-lg text-ink">Progression Graph</h2>
+        <div class="flex flex-col items-end gap-2">
+          <div class="chart-toggle" role="tablist" aria-label="View by">
+            <button id="trend-view-semester" type="button" class="chart-toggle-btn chart-toggle-btn-active">Semester</button>
+            <button id="trend-view-course" type="button" class="chart-toggle-btn">Course</button>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="chart-toggle" role="tablist" aria-label="Value type">
+              <button id="trend-value-gpa" type="button" class="chart-toggle-btn chart-toggle-btn-active">GPA</button>
+              <button id="trend-value-score" type="button" class="chart-toggle-btn">Score</button>
+            </div>
+            <button id="chart-zoom-reset" type="button" class="toolbar-btn !py-1.5 !px-2.5 !text-[11px]">Reset zoom</button>
+          </div>
+        </div>
       </div>
-      <p class="text-xs text-slate-500 mb-3">Block GPA and cumulative GPA across every completed semester / period block.</p>
-      <div class="h-64 relative">
-        <canvas id="ipk-trend-chart"></canvas>
+      <p id="trend-caption" class="text-xs text-slate-500 mb-1">Block and cumulative values across every completed semester / period block.</p>
+      <p class="text-[11px] text-slate-400 mb-3">Scroll / pinch to zoom, drag to pan, or hit reset above.</p>
+      <div id="trend-chart-scroll" class="h-80 overflow-x-auto overflow-y-hidden">
+        <div id="trend-chart-inner" class="relative h-full" style="min-width: 100%;">
+          <canvas id="ipk-trend-chart"></canvas>
+        </div>
       </div>
       <p id="trend-empty" class="hidden text-center text-xs text-slate-400 py-10">Complete at least one block to see your trend line.</p>
     </section>
 
-    <!-- Toolbar: search / filter / actions -->
+    <section class="metric-card rounded-2xl p-6 mb-8">
+      <h2 class="font-display text-lg text-ink mb-1">Grade Boundary Reference</h2>
+      <p class="text-xs text-slate-500 mb-4">Which numerical score maps to which letter grade and index.</p>
+      <div class="overflow-x-auto">
+        <table class="boundary-table w-full text-sm">
+          <thead>
+            <tr>
+              <th class="px-3 py-2 text-left">Score Range</th>
+              <th class="px-3 py-2 text-center">Letter</th>
+              <th class="px-3 py-2 text-center">Index</th>
+            </tr>
+          </thead>
+          <tbody id="grade-boundary-body"></tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="flex flex-col gap-3 mb-4">
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div class="relative w-full sm:max-w-xs">
@@ -198,7 +224,6 @@
         </div>
       </div>
 
-      <!-- Multi-tier filter bar -->
       <div class="flex flex-wrap items-center gap-2 filter-bar rounded-xl px-3 py-2.5">
         <span class="text-[11px] font-mono uppercase tracking-wide text-slate-400 mr-1">Filter</span>
         <select id="filter-grade" class="filter-select">
@@ -221,13 +246,11 @@
       </div>
     </section>
 
-    <!-- Loading state -->
     <div id="loading-state" class="flex flex-col items-center justify-center py-20 gap-3">
       <div class="spinner"></div>
       <p class="text-sm text-slate-400">Loading your transcript…</p>
     </div>
 
-    <!-- Empty state -->
     <div id="empty-state" class="hidden flex flex-col items-center justify-center text-center py-20 border border-dashed border-slate-200 rounded-2xl bg-white/60">
       <div class="w-12 h-12 rounded-full bg-brass/10 flex items-center justify-center mb-4">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 text-brass-dark"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -236,19 +259,16 @@
       <p class="text-sm text-slate-500 max-w-xs">Add your first subject — completed or planned — to start building your transcript and forecasting your GPA.</p>
     </div>
 
-    <!-- No results after filtering -->
     <div id="no-results-state" class="hidden flex flex-col items-center justify-center text-center py-16 border border-dashed border-slate-200 rounded-2xl bg-white/60">
       <p class="font-display text-base text-ink mb-1">No subjects match your filters</p>
       <p class="text-sm text-slate-500">Try adjusting search, grade range, credits, or type.</p>
     </div>
 
-    <!-- Semester / Period blocks render here -->
     <div id="semester-groups"></div>
 
   </main>
 </div>
 
-<!-- Course modal (add / edit) -->
 <div id="course-modal" class="hidden fixed inset-0 z-50">
   <div class="modal-backdrop absolute inset-0"></div>
   <div class="relative min-h-screen flex items-center justify-center p-4">
@@ -263,7 +283,6 @@
       <form id="course-form" novalidate>
         <input type="hidden" id="course-id" />
 
-        <!-- Planned course toggle -->
         <label class="flex items-start gap-3 mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 cursor-pointer select-none">
           <input id="is-hypothetical" type="checkbox" class="toggle-checkbox mt-0.5" />
           <span>
@@ -272,7 +291,6 @@
           </span>
         </label>
 
-        <!-- Semester + Period block -->
         <div class="mb-4">
           <label for="course-semester-number" class="block text-xs font-medium text-slate-600 mb-1">Semester</label>
           <input id="course-semester-number" type="number" min="1" step="1" placeholder="e.g. 1"
@@ -329,7 +347,6 @@
   </div>
 </div>
 
-<!-- Delete confirmation modal -->
 <div id="delete-modal" class="hidden fixed inset-0 z-50">
   <div class="modal-backdrop absolute inset-0"></div>
   <div class="relative min-h-screen flex items-center justify-center p-4">
@@ -351,7 +368,6 @@
   </div>
 </div>
 
-<!-- CSV import modal -->
 <div id="csv-modal" class="hidden fixed inset-0 z-50">
   <div class="modal-backdrop absolute inset-0"></div>
   <div class="relative min-h-screen flex items-center justify-center p-4">
@@ -376,7 +392,6 @@
   </div>
 </div>
 
-<!-- Course detail drawer -->
 <div id="detail-drawer" class="hidden fixed inset-0 z-50">
   <div class="modal-backdrop absolute inset-0"></div>
   <div class="drawer-panel absolute top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl flex flex-col">
@@ -415,8 +430,9 @@
   </div>
 </div>
 
-<!-- Toast -->
 <div id="toast" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] rounded-lg bg-ink text-paper text-sm px-4 py-2.5 shadow-xl"></div>
+
+<div class="watermark">Built by Vioo</div>
 
 <script type="module" src="firebase-config.js"></script>
 <script type="module" src="auth.js"></script>

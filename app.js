@@ -1,5 +1,3 @@
-// app.js
-
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 import {
@@ -14,10 +12,6 @@ import {
   serverTimestamp,
   writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-
-/* ======================================================================
-   Grading scale & validation
-   ====================================================================== */
 
 const GRADE_SCALE = [
   { min: 91, max: 100, letter: "A", index: 4.0 },
@@ -37,18 +31,15 @@ const LETTER_INDEX_MAP = GRADE_SCALE.reduce((map, entry) => {
 
 const VALID_LETTERS = GRADE_SCALE.map((entry) => entry.letter);
 
-// Vibrant, mutually-distinct palette — each grade gets its own hue rather
-// than a shade of the same color, so segments stay readable at a glance
-// even in a dense distribution with several grades represented.
 const GRADE_COLORS = {
-  A: "#10B981", // Emerald Green
-  "A-": "#2563EB", // Royal Blue
-  "B+": "#F59E0B", // Amber Gold
-  B: "#F43F5E", // Coral Red
-  "B-": "#7C3AED", // Deep Purple
-  "C+": "#06B6D4", // Cyan/Teal
-  C: "#DB2777", // Magenta/Pink
-  F: "#475569", // Slate/Charcoal
+  A: "#10B981",
+  "A-": "#2563EB",
+  "B+": "#F59E0B",
+  B: "#F43F5E",
+  "B-": "#7C3AED",
+  "C+": "#06B6D4",
+  C: "#DB2777",
+  F: "#475569",
 };
 
 function numberToGrade(score) {
@@ -110,10 +101,6 @@ function validateCredits(raw) {
   return { ok: true, value: num };
 }
 
-/* ======================================================================
-   Semester / Period block logic
-   ====================================================================== */
-
 function semesterMode(semester) {
   if (!Number.isInteger(semester) || semester < 1) return "invalid";
   if (semester === 3 || semester === 6) return "compact";
@@ -166,10 +153,6 @@ function blockLabelOf({ semester, period }) {
   return period ? `Semester ${semester} · Period ${period}` : `Semester ${semester} (Compact)`;
 }
 
-/* ======================================================================
-   State
-   ====================================================================== */
-
 let currentUser = null;
 let unsubscribeCourses = null;
 let courses = [];
@@ -179,7 +162,6 @@ let sortState = { key: "createdAt", dir: "asc" };
 let filters = { grade: "all", credits: "all", type: "all" };
 
 let includePlanned = true;
-let remainingSksManuallySet = false;
 
 let editingCourseId = null;
 let deletingCourse = null;
@@ -191,19 +173,12 @@ const collapsedSemesters = new Set();
 let trendChartInstance = null;
 let distributionChartInstance = null;
 
-// --- Chart readiness gating -------------------------------------------
-// Charts must not be touched until BOTH of these are true: auth has
-// resolved to a signed-in user, AND at least one Firestore snapshot for
-// that user's courses has been received (even if it's empty). Without
-// this gate, a stray render() call triggered mid-navigation (e.g. right
-// after sign-in, before the first onSnapshot fires) can try to draw into
-// a canvas with no data context and no guaranteed layout yet.
+// Progression graph: two independent toggle pairs.
+let trendViewMode = "semester"; // "semester" | "course"
+let trendValueMode = "gpa"; // "gpa" | "score"
+
 let authReady = false;
 let dataLoaded = false;
-
-/* ======================================================================
-   DOM references
-   ====================================================================== */
 
 const el = {};
 
@@ -224,7 +199,8 @@ function cacheDom() {
   el.includePlannedToggle = document.getElementById("include-planned-toggle");
 
   el.simTargetIpk = document.getElementById("sim-target-ipk");
-  el.simRemainingSks = document.getElementById("sim-remaining-sks");
+  el.simRemainingSksDisplay = document.getElementById("sim-remaining-sks-display");
+  el.simPlannedBreakdown = document.getElementById("sim-planned-breakdown");
   el.simResultText = document.getElementById("sim-result-text");
 
   el.filterGrade = document.getElementById("filter-grade");
@@ -290,13 +266,20 @@ function cacheDom() {
 
   el.trendChartCanvas = document.getElementById("ipk-trend-chart");
   el.trendEmpty = document.getElementById("trend-empty");
+  el.trendCaption = document.getElementById("trend-caption");
+  el.trendChartScroll = document.getElementById("trend-chart-scroll");
+  el.trendChartInner = document.getElementById("trend-chart-inner");
   el.distributionChartCanvas = document.getElementById("grade-distribution-chart");
   el.distributionEmpty = document.getElementById("distribution-empty");
-}
 
-/* ======================================================================
-   Firestore
-   ====================================================================== */
+  el.trendViewSemesterBtn = document.getElementById("trend-view-semester");
+  el.trendViewCourseBtn = document.getElementById("trend-view-course");
+  el.trendValueGpaBtn = document.getElementById("trend-value-gpa");
+  el.trendValueScoreBtn = document.getElementById("trend-value-score");
+  el.chartZoomResetBtn = document.getElementById("chart-zoom-reset");
+
+  el.gradeBoundaryBody = document.getElementById("grade-boundary-body");
+}
 
 function coursesCollectionRef() {
   return collection(db, "users", currentUser.uid, "courses");
@@ -312,13 +295,13 @@ function subscribeToCourses() {
     q,
     (snapshot) => {
       courses = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      dataLoaded = true; // first (and every subsequent) snapshot has now arrived
+      dataLoaded = true;
       toggleLoading(false);
       render();
     },
     (error) => {
       console.error("Failed to load courses:", error);
-      dataLoaded = true; // don't block chart gating forever on a failed load
+      dataLoaded = true;
       toggleLoading(false);
       el.semesterGroups.innerHTML =
         '<p class="py-8 text-center text-rust text-sm">Couldn\'t load your courses. Please refresh the page.</p>';
@@ -402,10 +385,6 @@ async function bulkImportCourses(rows) {
   }
 }
 
-/* ======================================================================
-   Derived data: totals, inclusion, grouping
-   ====================================================================== */
-
 function isCourseIncludable(course) {
   if (!course.isHypothetical) return true;
   return includePlanned && course.includeInCalc !== false;
@@ -430,6 +409,21 @@ function computeTotals(courseList) {
   return { sksTotal, productTotal, ipk };
 }
 
+function computeScoreTotals(courseList) {
+  let sksTotal = 0;
+  let weightedScore = 0;
+
+  courseList.forEach((course) => {
+    if (typeof course.scoreNumber !== "number") return;
+    const credits = Number(course.credits) || 0;
+    sksTotal += credits;
+    weightedScore += credits * course.scoreNumber;
+  });
+
+  const avgScore = sksTotal > 0 ? weightedScore / sksTotal : null;
+  return { sksTotal, avgScore };
+}
+
 function groupByBlock(list) {
   const map = new Map();
   list.forEach((course) => {
@@ -447,9 +441,19 @@ function groupByBlock(list) {
   });
 }
 
-/* ======================================================================
-   Filtering & sorting
-   ====================================================================== */
+// Chronological order = semester ascending, then period ascending
+// (matching groupByBlock's sort), flattened back into a flat course list.
+// This is what the "By Course" progression view walks through, so it
+// always follows real semester order rather than Firestore insertion order.
+function getChronologicalCompletedCourses() {
+  const completed = courses.filter((c) => !c.isHypothetical);
+  const groups = groupByBlock(completed);
+  const ordered = [];
+  groups.forEach((group) => {
+    group.courses.forEach((course) => ordered.push(course));
+  });
+  return ordered;
+}
 
 function matchesGradeFilter(course) {
   const idx = Number(course.scoreIndex) || 0;
@@ -540,10 +544,6 @@ function refreshCreditsFilterOptions() {
   if (distinct.some((n) => String(n) === current)) el.filterCredits.value = current;
 }
 
-/* ======================================================================
-   Rendering
-   ====================================================================== */
-
 function gradeBadgeClass(letter) {
   const base = (letter || "").charAt(0);
   switch (base) {
@@ -586,25 +586,30 @@ function renderMetrics() {
 }
 
 function renderSimulator() {
-  if (!remainingSksManuallySet) {
-    const plannedSks = courses
-      .filter((c) => c.isHypothetical && c.includeInCalc !== false)
-      .reduce((sum, c) => sum + (Number(c.credits) || 0), 0);
-    el.simRemainingSks.value = plannedSks > 0 ? plannedSks : "";
+  const plannedCourses = courses.filter((c) => c.isHypothetical && c.includeInCalc !== false);
+  const remainingSks = plannedCourses.reduce((sum, c) => sum + (Number(c.credits) || 0), 0);
+
+  if (el.simRemainingSksDisplay) {
+    el.simRemainingSksDisplay.textContent = remainingSks > 0 ? remainingSks.toFixed(0) : "0";
+  }
+  if (el.simPlannedBreakdown) {
+    el.simPlannedBreakdown.textContent =
+      plannedCourses.length > 0
+        ? `Counting ${plannedCourses.length} planned course${plannedCourses.length === 1 ? "" : "s"} totaling ${remainingSks.toFixed(0)} SKS.`
+        : "No planned courses yet — add one with the \"planned / future course\" toggle to use the simulator.";
   }
 
   const targetIpk = parseFloat(el.simTargetIpk.value);
-  const remainingSks = parseFloat(el.simRemainingSks.value);
   const baseline = computeTotals(courses.filter((c) => !c.isHypothetical));
 
   if (!Number.isFinite(targetIpk) || targetIpk <= 0) {
     el.simResultText.textContent =
-      "Enter a goal GPA to see the average index you'll need across your remaining coursework.";
+      "Enter a goal GPA to see the minimum score you'll need across your planned courses.";
     return;
   }
-  if (!Number.isFinite(remainingSks) || remainingSks <= 0) {
+  if (remainingSks <= 0) {
     el.simResultText.textContent =
-      "Enter your remaining estimated SKS (or add planned courses below to auto-fill it).";
+      "Add planned courses (toggle \"This is a planned / future course\" when adding one) so the simulator has something to solve for.";
     return;
   }
 
@@ -614,24 +619,28 @@ function renderSimulator() {
   if (requiredIndex <= 0) {
     el.simResultText.innerHTML = `You've already secured enough to clear a <strong>${targetIpk.toFixed(
       2
-    )}</strong> cumulative GPA — even an average of <strong>0.00</strong> across your remaining ${remainingSks} SKS would keep you there.`;
+    )}</strong> cumulative GPA — even scoring <strong>0</strong> across your remaining ${remainingSks.toFixed(
+      0
+    )} planned SKS would keep you there.`;
     return;
   }
 
   if (requiredIndex > 4.0) {
     const maxPossible = (baseline.productTotal + 4.0 * remainingSks) / (baseline.sksTotal + remainingSks);
-    el.simResultText.innerHTML = `That goal isn't reachable with only ${remainingSks} SKS left — even a perfect <strong>4.00</strong> average caps your cumulative GPA at <strong>${maxPossible.toFixed(
+    el.simResultText.innerHTML = `That goal isn't reachable with your current planned courses — even perfect <strong>A</strong> scores cap your cumulative GPA at <strong>${maxPossible.toFixed(
       2
-    )}</strong>. Add more remaining SKS or lower your target.`;
+    )}</strong>. Add more planned SKS or lower your target.`;
     return;
   }
 
   const grade = letterForRequiredIndex(requiredIndex);
   el.simResultText.innerHTML = `To hit a <strong>${targetIpk.toFixed(
     2
-  )}</strong> cumulative GPA, you need an average of <strong>${requiredIndex.toFixed(
-    2
-  )}</strong> (roughly a <strong>${grade.letter}</strong>) across your remaining <strong>${remainingSks}</strong> estimated SKS.`;
+  )}</strong> cumulative GPA, you need an average score of at least <strong>${grade.min}</strong> (a <strong>${grade.letter}</strong>, index ${grade.index.toFixed(
+    1
+  )}) across your <strong>${plannedCourses.length}</strong> planned course${plannedCourses.length === 1 ? "" : "s"} (<strong>${remainingSks.toFixed(
+    0
+  )}</strong> SKS).`;
 }
 
 function renderSemesterGroups() {
@@ -777,19 +786,6 @@ function toggleLoading(isLoading) {
   }
 }
 
-/* ======================================================================
-   Charts
-   ====================================================================== */
-
-// --- Chart.js library load tracking -------------------------------------
-// Chart.js is loaded from a CDN in a plain <script> tag. If that request
-// is blocked (ad-blocker/privacy extension) or fails on a flaky
-// connection, `Chart` never becomes defined and every chart render call
-// was previously just silently returning — leaving a permanently blank
-// box with no error and no "no data" placeholder, which is indistinguishable
-// from "everything is fine, there's just nothing to draw." That's a bug in
-// itself: failures should be visible. This tracks the load state and
-// retries for a few seconds before giving up and showing a real message.
 let chartLibraryReady = typeof Chart !== "undefined";
 let chartLibraryFailed = false;
 let chartLibraryPollStarted = false;
@@ -805,18 +801,13 @@ function waitForChartLibrary() {
     if (typeof Chart !== "undefined") {
       chartLibraryReady = true;
       chartLibraryPollStarted = false;
-      renderCharts(); // re-attempt now that the library is actually here
+      renderCharts();
       return;
     }
     if (Date.now() - start > CHART_LOAD_TIMEOUT_MS) {
       chartLibraryFailed = true;
       chartLibraryPollStarted = false;
-      console.error(
-        "Chart.js never became available — it most likely failed to load " +
-          "from the CDN (blocked by an ad-blocker/privacy extension, or no " +
-          "network access to cdnjs.cloudflare.com). Check the Network tab " +
-          "for a failed request to chart.umd.min.js."
-      );
+      console.error("Chart.js never became available — check the Network tab for a failed CDN request.");
       showChartLoadError();
       return;
     }
@@ -828,7 +819,7 @@ function waitForChartLibrary() {
 
 function showChartLoadError() {
   const message =
-    "Charts couldn't load — Chart.js failed to fetch from the CDN. Check your connection or browser extensions (ad-blockers can block cdnjs.cloudflare.com), then refresh.";
+    "Charts couldn't load — Chart.js failed to fetch from the CDN. Check your connection or browser extensions, then refresh.";
   if (el.trendChartCanvas) el.trendChartCanvas.classList.add("hidden");
   if (el.trendEmpty) {
     el.trendEmpty.textContent = message;
@@ -841,18 +832,6 @@ function showChartLoadError() {
   }
 }
 
-/**
- * Entry point for (re)rendering both charts. This is the single gate
- * everything else funnels through:
- *  - Refuses to run until auth has resolved AND the first Firestore
- *    snapshot has landed (dataLoaded), so we never race the initial page
- *    load.
- *  - Refuses to run (and instead shows a real error) if Chart.js itself
- *    never loaded, rather than silently doing nothing.
- *  - Delegates the actual Chart.js work to ensureCanvasVisible(), which
- *    waits for the canvas to actually have a non-zero layout box (instead
- *    of assuming a single requestAnimationFrame is enough) before drawing.
- */
 function renderCharts() {
   if (!authReady || !dataLoaded) return;
 
@@ -862,7 +841,7 @@ function renderCharts() {
   }
   if (typeof Chart === "undefined") {
     waitForChartLibrary();
-    return; // will call renderCharts() again once the library shows up (or times out into an error)
+    return;
   }
   chartLibraryReady = true;
 
@@ -870,21 +849,14 @@ function renderCharts() {
   ensureCanvasVisible(el.distributionChartCanvas, renderDistributionChart);
 }
 
-/**
- * Waits for `canvas` to report real layout dimensions before invoking
- * `renderFn`. Retries across animation frames (capped) rather than
- * assuming one frame is enough — covers cases where the canvas's parent
- * was just un-hidden (visibility/display toggled) in the same tick, or
- * the surrounding auth-guarded shell hasn't finished its reveal yet.
- */
 function ensureCanvasVisible(canvas, renderFn, attempt = 0) {
   if (!canvas) return;
 
-  const MAX_ATTEMPTS = 40; // ~40 frames, generous but bounded
+  const MAX_ATTEMPTS = 40;
   const hasLayout = canvas.clientWidth > 0 && canvas.clientHeight > 0;
   const isConnected = canvas.isConnected;
 
-  if (!isConnected) return; // canvas was removed from the DOM, bail quietly
+  if (!isConnected) return;
 
   if (!hasLayout) {
     if (attempt < MAX_ATTEMPTS) {
@@ -896,13 +868,10 @@ function ensureCanvasVisible(canvas, renderFn, attempt = 0) {
   try {
     renderFn();
   } catch (error) {
-    // A draw failure here should never take down the rest of the app —
-    // log it and leave whatever chart state existed before untouched.
     console.error("Chart render failed:", error);
   }
 }
 
-/** Safely tears down a Chart.js instance, tolerating an already-dead one. */
 function safeDestroyChart(instance) {
   if (!instance) return null;
   try {
@@ -913,8 +882,194 @@ function safeDestroyChart(instance) {
   return null;
 }
 
+function updateTrendCaption() {
+  if (!el.trendCaption) return;
+  if (trendViewMode === "course") {
+    el.trendCaption.textContent =
+      trendValueMode === "score"
+        ? "Every completed subject's raw score, in real semester order — spot exactly which course pulled your average up or down."
+        : "Every completed subject's grade index, in real semester order — spot exactly which course pulled your average up or down.";
+  } else {
+    el.trendCaption.textContent =
+      trendValueMode === "score"
+        ? "Block and cumulative average scores across every completed semester / period block."
+        : "Block and cumulative GPA across every completed semester / period block.";
+  }
+}
+
+function setTrendViewMode(mode) {
+  if (mode === trendViewMode) return;
+  trendViewMode = mode;
+  if (el.trendViewSemesterBtn) el.trendViewSemesterBtn.classList.toggle("chart-toggle-btn-active", mode === "semester");
+  if (el.trendViewCourseBtn) el.trendViewCourseBtn.classList.toggle("chart-toggle-btn-active", mode === "course");
+  updateTrendCaption();
+  renderTrendChart();
+}
+
+function setTrendValueMode(mode) {
+  if (mode === trendValueMode) return;
+  trendValueMode = mode;
+  if (el.trendValueGpaBtn) el.trendValueGpaBtn.classList.toggle("chart-toggle-btn-active", mode === "gpa");
+  if (el.trendValueScoreBtn) el.trendValueScoreBtn.classList.toggle("chart-toggle-btn-active", mode === "score");
+  updateTrendCaption();
+  renderTrendChart();
+}
+
+// Builds the point-by-point series for "By Course" mode, walking the
+// courses in real chronological (semester → period) order, not
+// insertion order.
+function computeCourseTrendPoints(chronologicalCompletedCourses, valueMode) {
+  const points = chronologicalCompletedCourses.filter((c) =>
+    valueMode === "score" ? typeof c.scoreNumber === "number" : typeof c.scoreIndex === "number"
+  );
+
+  const labels = [];
+  const values = [];
+  const pointColors = [];
+  const cumulative = [];
+  let cumSks = 0;
+  let cumWeighted = 0;
+  let prevValue = null;
+
+  points.forEach((course) => {
+    const raw = valueMode === "score" ? course.scoreNumber : course.scoreIndex;
+    labels.push(course.subjectCode || course.subjectName || "—");
+    values.push(Number(raw.toFixed(valueMode === "score" ? 1 : 2)));
+
+    if (prevValue === null) pointColors.push("#8A93A1");
+    else if (raw > prevValue) pointColors.push("#3F6B4F");
+    else if (raw < prevValue) pointColors.push("#9C3B3B");
+    else pointColors.push("#A6802D");
+    prevValue = raw;
+
+    const credits = Number(course.credits) || 0;
+    cumSks += credits;
+    cumWeighted += credits * (Number(raw) || 0);
+    cumulative.push(Number((cumSks > 0 ? cumWeighted / cumSks : 0).toFixed(valueMode === "score" ? 1 : 2)));
+  });
+
+  return { labels, values, pointColors, cumulative, points };
+}
+
+function setTrendChartWidth(pointCount, pxPerPoint) {
+  if (!el.trendChartInner || !el.trendChartScroll) return;
+  const available = el.trendChartScroll.clientWidth || 0;
+  const desired = Math.max(available, pointCount * pxPerPoint);
+  el.trendChartInner.style.width = desired + "px";
+}
+
+const TREND_ZOOM_PLUGIN_OPTIONS = {
+  pan: { enabled: true, mode: "x" },
+  zoom: {
+    wheel: { enabled: true },
+    pinch: { enabled: true },
+    drag: { enabled: false },
+    mode: "x",
+  },
+  limits: { x: { minRange: 3 } },
+};
+
 function renderTrendChart() {
   if (typeof Chart === "undefined" || !el.trendChartCanvas) return;
+
+  const isScoreMode = trendValueMode === "score";
+
+  if (trendViewMode === "course") {
+    const chronological = getChronologicalCompletedCourses();
+    const { labels, values, pointColors, cumulative, points } = computeCourseTrendPoints(chronological, trendValueMode);
+
+    if (labels.length === 0) {
+      trendChartInstance = safeDestroyChart(trendChartInstance);
+      el.trendChartCanvas.classList.add("hidden");
+      el.trendEmpty.textContent = isScoreMode
+        ? "No numeric scores on record yet — courses entered as a direct letter grade don't have a number to chart."
+        : "Add a completed subject to see your course-by-course progression.";
+      el.trendEmpty.classList.remove("hidden");
+      return;
+    }
+
+    el.trendChartCanvas.classList.remove("hidden");
+    el.trendEmpty.classList.add("hidden");
+    setTrendChartWidth(labels.length, 64);
+
+    const config = {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: isScoreMode ? "Cumulative Score" : "Cumulative GPA",
+            data: cumulative,
+            borderColor: "#A6802D",
+            backgroundColor: "rgba(166,128,45,0.10)",
+            fill: true,
+            tension: 0.25,
+            pointRadius: 0,
+            borderWidth: 1.5,
+            order: 2,
+          },
+          {
+            label: isScoreMode ? "Course Score" : "Course Grade (Index)",
+            data: values,
+            borderColor: "rgba(138,147,161,0.6)",
+            backgroundColor: "rgba(138,147,161,0.08)",
+            tension: 0,
+            borderWidth: 1,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            pointBackgroundColor: pointColors,
+            pointBorderColor: "#FAF8F3",
+            pointBorderWidth: 1.5,
+            order: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        resizeDelay: 50,
+        scales: {
+          y: isScoreMode
+            ? { min: 0, max: 100, ticks: { stepSize: 20, font: { family: "IBM Plex Mono" } } }
+            : { min: 0, max: 4, ticks: { stepSize: 1, font: { family: "IBM Plex Mono" } } },
+          x: { ticks: { font: { family: "IBM Plex Mono", size: 10 }, autoSkip: false, maxRotation: 60 } },
+        },
+        plugins: {
+          legend: { position: "bottom", labels: { font: { family: "Inter", size: 11 }, boxWidth: 12 } },
+          zoom: TREND_ZOOM_PLUGIN_OPTIONS,
+          tooltip: {
+            callbacks: {
+              afterTitle(items) {
+                const idx = items[0].dataIndex;
+                const point = points[idx];
+                if (!point) return "";
+                return `${point.subjectName || ""} — ${blockLabelOf({ semester: point.semester, period: point.period })}`;
+              },
+            },
+          },
+        },
+      },
+    };
+
+    try {
+      if (trendChartInstance) {
+        trendChartInstance.data = config.data;
+        trendChartInstance.options = config.options;
+        trendChartInstance.update();
+      } else {
+        trendChartInstance = new Chart(el.trendChartCanvas, config);
+      }
+    } catch (error) {
+      console.error("Trend chart (course mode) init failed, rebuilding:", error);
+      trendChartInstance = safeDestroyChart(trendChartInstance);
+      try {
+        trendChartInstance = new Chart(el.trendChartCanvas, config);
+      } catch (retryError) {
+        console.error("Trend chart rebuild also failed:", retryError);
+      }
+    }
+    return;
+  }
 
   const completedGroups = groupByBlock(courses.filter((c) => !c.isHypothetical));
 
@@ -924,23 +1079,56 @@ function renderTrendChart() {
     el.trendEmpty.classList.remove("hidden");
     return;
   }
-  el.trendChartCanvas.classList.remove("hidden");
-  el.trendEmpty.classList.add("hidden");
 
   const labels = [];
-  const ipsSeries = [];
-  const ipkSeries = [];
-  let cumSks = 0;
-  let cumProduct = 0;
+  const blockSeries = [];
+  const cumulativeSeries = [];
 
-  completedGroups.forEach((group) => {
-    const totals = computeTotals(group.courses);
-    cumSks += totals.sksTotal;
-    cumProduct += totals.productTotal;
-    labels.push(blockLabelOf({ semester: group.semester, period: group.period }));
-    ipsSeries.push(Number(totals.ipk.toFixed(2)));
-    ipkSeries.push(Number((cumSks > 0 ? cumProduct / cumSks : 0).toFixed(2)));
-  });
+  if (isScoreMode) {
+    let cumSks = 0;
+    let cumWeighted = 0;
+    let anyScorePresent = false;
+
+    completedGroups.forEach((group) => {
+      const blockTotals = computeScoreTotals(group.courses);
+      labels.push(blockLabelOf({ semester: group.semester, period: group.period }));
+      blockSeries.push(blockTotals.avgScore === null ? null : Number(blockTotals.avgScore.toFixed(1)));
+
+      group.courses.forEach((course) => {
+        if (typeof course.scoreNumber !== "number") return;
+        const credits = Number(course.credits) || 0;
+        cumSks += credits;
+        cumWeighted += credits * course.scoreNumber;
+        anyScorePresent = true;
+      });
+      cumulativeSeries.push(cumSks > 0 ? Number((cumWeighted / cumSks).toFixed(1)) : null);
+    });
+
+    if (!anyScorePresent) {
+      trendChartInstance = safeDestroyChart(trendChartInstance);
+      el.trendChartCanvas.classList.add("hidden");
+      el.trendEmpty.textContent =
+        "No numeric scores on record yet — courses entered as a direct letter grade don't have a number to chart.";
+      el.trendEmpty.classList.remove("hidden");
+      return;
+    }
+  } else {
+    let cumSks = 0;
+    let cumProduct = 0;
+
+    completedGroups.forEach((group) => {
+      const totals = computeTotals(group.courses);
+      cumSks += totals.sksTotal;
+      cumProduct += totals.productTotal;
+      labels.push(blockLabelOf({ semester: group.semester, period: group.period }));
+      blockSeries.push(Number(totals.ipk.toFixed(2)));
+      cumulativeSeries.push(Number((cumSks > 0 ? cumProduct / cumSks : 0).toFixed(2)));
+    });
+  }
+
+  el.trendChartCanvas.classList.remove("hidden");
+  el.trendEmpty.classList.add("hidden");
+  setTrendChartWidth(labels.length, 110);
 
   const config = {
     type: "line",
@@ -948,38 +1136,41 @@ function renderTrendChart() {
       labels,
       datasets: [
         {
-          label: "Block GPA",
-          data: ipsSeries,
+          label: isScoreMode ? "Block Score" : "Block GPA",
+          data: blockSeries,
           borderColor: "#8A93A1",
           backgroundColor: "rgba(138,147,161,0.12)",
           borderDash: [4, 3],
           tension: 0.3,
           pointRadius: 3,
+          spanGaps: true,
         },
         {
-          label: "Cumulative GPA",
-          data: ipkSeries,
+          label: isScoreMode ? "Cumulative Score" : "Cumulative GPA",
+          data: cumulativeSeries,
           borderColor: "#A6802D",
           backgroundColor: "rgba(166,128,45,0.14)",
           fill: true,
           tension: 0.3,
           pointRadius: 4,
           pointBackgroundColor: "#A6802D",
+          spanGaps: true,
         },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      // Prevents Chart.js from thrashing on rapid successive resize
-      // events (e.g. a burst of onSnapshot updates during CSV import).
       resizeDelay: 50,
       scales: {
-        y: { min: 0, max: 4, ticks: { stepSize: 1, font: { family: "IBM Plex Mono" } } },
+        y: isScoreMode
+          ? { min: 0, max: 100, ticks: { stepSize: 20, font: { family: "IBM Plex Mono" } } }
+          : { min: 0, max: 4, ticks: { stepSize: 1, font: { family: "IBM Plex Mono" } } },
         x: { ticks: { font: { family: "IBM Plex Mono", size: 10 } } },
       },
       plugins: {
         legend: { position: "bottom", labels: { font: { family: "Inter", size: 11 }, boxWidth: 12 } },
+        zoom: TREND_ZOOM_PLUGIN_OPTIONS,
       },
     },
   };
@@ -987,14 +1178,12 @@ function renderTrendChart() {
   try {
     if (trendChartInstance) {
       trendChartInstance.data = config.data;
+      trendChartInstance.options = config.options;
       trendChartInstance.update();
     } else {
       trendChartInstance = new Chart(el.trendChartCanvas, config);
     }
   } catch (error) {
-    // Canvas was likely reused/stale (e.g. a leftover instance pointing at
-    // a torn-down context). Drop it and rebuild clean rather than leaving
-    // the chart permanently broken.
     console.error("Trend chart init failed, rebuilding:", error);
     trendChartInstance = safeDestroyChart(trendChartInstance);
     try {
@@ -1034,8 +1223,6 @@ function renderDistributionChart() {
         {
           data: activeLetters.map((l) => counts[l]),
           backgroundColor: activeLetters.map((l) => GRADE_COLORS[l] || "#8A93A1"),
-          // A visible paper-colored gap between segments keeps adjacent
-          // high-saturation colors from bleeding into each other.
           borderColor: "#FAF8F3",
           borderWidth: 3,
           hoverBorderColor: "#FFFFFF",
@@ -1073,12 +1260,6 @@ function renderDistributionChart() {
   }
 }
 
-/**
- * Classic Chart.js gotcha: if a chart is constructed while its tab/panel
- * is backgrounded (e.g. the browser throttles layout in a hidden tab),
- * it can end up permanently mis-sized. Force a resize the moment the tab
- * becomes visible again as a cheap safety net.
- */
 function handleVisibilityRecovery() {
   if (document.hidden) return;
   try {
@@ -1089,9 +1270,17 @@ function handleVisibilityRecovery() {
   }
 }
 
-/* ======================================================================
-   Course modal (add / edit)
-   ====================================================================== */
+function renderGradeBoundaryTable() {
+  if (!el.gradeBoundaryBody) return;
+  el.gradeBoundaryBody.innerHTML = GRADE_SCALE.map(
+    (entry) => `
+      <tr>
+        <td class="px-3 py-2 font-mono text-slate-600">${entry.min}–${entry.max}</td>
+        <td class="px-3 py-2 text-center"><span class="${gradeBadgeClass(entry.letter)}">${entry.letter}</span></td>
+        <td class="px-3 py-2 font-mono text-slate-600 text-center">${entry.index.toFixed(1)}</td>
+      </tr>`
+  ).join("");
+}
 
 function resetCourseFormErrors() {
   [el.subjectNameError, el.creditsError, el.gradeError, el.courseSemesterError].forEach((node) => {
@@ -1118,7 +1307,7 @@ function syncGradeFieldLabel() {
   el.gradeInputLabel.textContent = isFuture ? "Target grade" : "Grade";
   el.gradeInput.placeholder = isFuture ? "e.g. A- (your goal)" : "91 or A-";
   el.gradeHelpText.textContent = isFuture
-    ? "Enter the score or letter grade you're aiming for. You can toggle this course in or out of your GPA anytime."
+    ? "Enter the score or letter grade you're aiming for. You can toggle this course in or out of your GPA calculation later."
     : "Enter a score from 0–100, or a letter grade (A, A-, B+, B, B-, C+, C, F).";
 }
 
@@ -1260,10 +1449,6 @@ async function handleCourseFormSubmit(event) {
   }
 }
 
-/* ======================================================================
-   Delete modal
-   ====================================================================== */
-
 function openDeleteModal(course) {
   deletingCourse = course;
   el.deleteModalName.textContent = course.subjectName;
@@ -1295,10 +1480,6 @@ async function handleDeleteConfirm() {
     el.deleteConfirmBtn.textContent = "Delete";
   }
 }
-
-/* ======================================================================
-   Course detail drawer
-   ====================================================================== */
 
 function openDrawer(course) {
   drawerCourseId = course.id;
@@ -1350,10 +1531,6 @@ async function handleDrawerSave() {
   }
 }
 
-/* ======================================================================
-   CSV export / import
-   ====================================================================== */
-
 const CSV_HEADERS = [
   "Semester",
   "Period",
@@ -1402,7 +1579,7 @@ function exportCoursesToCsv() {
   const a = document.createElement("a");
   const stamp = new Date().toISOString().slice(0, 10);
   a.href = url;
-  a.download = `gpa-ledger-transcript-${stamp}.csv`;
+  a.download = `gpa-calculator-transcript-${stamp}.csv`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -1603,10 +1780,6 @@ async function handleCsvImportConfirm() {
   }
 }
 
-/* ======================================================================
-   Toast
-   ====================================================================== */
-
 let toastTimer = null;
 function showToast(message) {
   if (!el.toast) return;
@@ -1615,10 +1788,6 @@ function showToast(message) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.toast.classList.add("hidden"), 2600);
 }
-
-/* ======================================================================
-   Event wiring
-   ====================================================================== */
 
 function wireEvents() {
   if (el.addCourseBtn) el.addCourseBtn.addEventListener("click", () => openCourseModal("add"));
@@ -1662,6 +1831,18 @@ function wireEvents() {
   });
 
   document.addEventListener("visibilitychange", handleVisibilityRecovery);
+
+  if (el.trendViewSemesterBtn) el.trendViewSemesterBtn.addEventListener("click", () => setTrendViewMode("semester"));
+  if (el.trendViewCourseBtn) el.trendViewCourseBtn.addEventListener("click", () => setTrendViewMode("course"));
+  if (el.trendValueGpaBtn) el.trendValueGpaBtn.addEventListener("click", () => setTrendValueMode("gpa"));
+  if (el.trendValueScoreBtn) el.trendValueScoreBtn.addEventListener("click", () => setTrendValueMode("score"));
+  if (el.chartZoomResetBtn) {
+    el.chartZoomResetBtn.addEventListener("click", () => {
+      if (trendChartInstance && typeof trendChartInstance.resetZoom === "function") {
+        trendChartInstance.resetZoom();
+      }
+    });
+  }
 
   if (el.semesterGroups) {
     el.semesterGroups.addEventListener("click", (event) => {
@@ -1724,12 +1905,6 @@ function wireEvents() {
   }
 
   if (el.simTargetIpk) el.simTargetIpk.addEventListener("input", renderSimulator);
-  if (el.simRemainingSks) {
-    el.simRemainingSks.addEventListener("input", () => {
-      remainingSksManuallySet = el.simRemainingSks.value.trim() !== "";
-      renderSimulator();
-    });
-  }
 
   if (el.filterGrade) el.filterGrade.addEventListener("change", () => { filters.grade = el.filterGrade.value; renderSemesterGroups(); });
   if (el.filterCredits) el.filterCredits.addEventListener("change", () => { filters.credits = el.filterCredits.value; renderSemesterGroups(); });
@@ -1759,20 +1934,17 @@ function wireEvents() {
   }
 }
 
-/* ======================================================================
-   Init
-   ====================================================================== */
-
 function init(user) {
   currentUser = user;
   if (el.userEmail) el.userEmail.textContent = user.displayName || user.email;
-  dataLoaded = false; // reset so charts wait for THIS user's first snapshot
+  dataLoaded = false;
   subscribeToCourses();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   cacheDom();
   wireEvents();
+  renderGradeBoundaryTable();
 
   onAuthStateChanged(auth, (user) => {
     if (user) {

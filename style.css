@@ -493,3 +493,38 @@ select:focus-visible,
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Chart mode toggle (GPA / Score)                                     */
+/* ------------------------------------------------------------------ */
+
+.chart-toggle {
+  display: inline-flex;
+  border: 1px solid rgba(16, 24, 38, 0.12);
+  border-radius: 999px;
+  padding: 2px;
+  background: #F4F5F6;
+}
+
+.chart-toggle-btn {
+  border: none;
+  background: transparent;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  color: #6B7480;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.chart-toggle-btn:hover {
+  color: #232B36;
+}
+
+.chart-toggle-btn-active {
+  background: #101826;
+  color: #FAF8F3;
+}

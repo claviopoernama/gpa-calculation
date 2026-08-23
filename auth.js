@@ -22,9 +22,6 @@ function currentPageIsAuth() {
   return path.endsWith(PAGE.AUTH) || path.endsWith("/") || path === "";
 }
 
-/**
- * Maps Firebase Auth error codes to short, human-readable messages.
- */
 function mapAuthError(error) {
   const code = error && error.code ? error.code : "";
   switch (code) {
@@ -51,17 +48,9 @@ function mapAuthError(error) {
     case "auth/operation-not-allowed":
       return "Email/password sign-in is not enabled for this project.";
     default:
-      return error && error.message
-        ? error.message
-        : "Something went wrong. Please try again.";
+      return error && error.message ? error.message : "Something went wrong. Please try again.";
   }
 }
-
-/* ---------------------------------------------------------------------- */
-/* Feedback messages (error / success)                                     */
-/* ---------------------------------------------------------------------- */
-// Error and success feedback share the same real estate above the forms,
-// so showing one always clears the other rather than letting them stack.
 
 function showAuthError(message) {
   const errorBox = document.getElementById("auth-error");
@@ -111,10 +100,6 @@ function setButtonLoading(button, isLoading, loadingText) {
   }
 }
 
-/* ---------------------------------------------------------------------- */
-/* Tab switching (sign in / sign up)                                       */
-/* ---------------------------------------------------------------------- */
-
 function initTabs() {
   const tabSignIn = document.getElementById("tab-signin");
   const tabSignUp = document.getElementById("tab-signup");
@@ -142,10 +127,6 @@ function initTabs() {
   tabSignUp.addEventListener("click", () => activate("signup"));
 }
 
-/* ---------------------------------------------------------------------- */
-/* Sign in / Sign up / Sign out                                            */
-/* ---------------------------------------------------------------------- */
-
 function initSignInForm() {
   const form = document.getElementById("signin-form");
   if (!form) return;
@@ -167,8 +148,6 @@ function initSignInForm() {
     setButtonLoading(submitBtn, true, "Signing in…");
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // The onAuthStateChanged listener below handles redirecting to
-      // dashboard.html once Firebase confirms the session.
     } catch (error) {
       showAuthError(mapAuthError(error));
     } finally {
@@ -213,8 +192,6 @@ function initSignUpForm() {
     try {
       const credential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(credential.user, { displayName: name });
-      // The onAuthStateChanged listener below handles redirecting to
-      // dashboard.html once Firebase confirms the session.
     } catch (error) {
       showAuthError(mapAuthError(error));
     } finally {
@@ -231,18 +208,12 @@ function initLogoutButton() {
     logoutBtn.disabled = true;
     try {
       await signOut(auth);
-      // The onAuthStateChanged listener below handles redirecting back to
-      // index.html once the session is cleared.
     } catch (error) {
       console.error("Sign out failed:", error);
       logoutBtn.disabled = false;
     }
   });
 }
-
-/* ---------------------------------------------------------------------- */
-/* Forgot password                                                         */
-/* ---------------------------------------------------------------------- */
 
 function initForgotPassword() {
   const tabList = document.querySelector('[role="tablist"]');
@@ -275,7 +246,6 @@ function initForgotPassword() {
     panelSignIn.classList.remove("hidden");
     if (tabList) tabList.classList.remove("hidden");
 
-    // Make sure the tab indicator agrees we're back on "Sign in".
     const tabSignIn = document.getElementById("tab-signin");
     const tabSignUp = document.getElementById("tab-signup");
     if (tabSignIn && tabSignUp) {
@@ -298,8 +268,6 @@ function initForgotPassword() {
     const email = emailInput.value.trim();
     const submitBtn = forgotForm.querySelector("button[type='submit']");
 
-    // Prevent submission outright if the field is empty — don't let
-    // Firebase round-trip just to report what we already know locally.
     if (!email) {
       showAuthError("Enter your email address.");
       emailInput.focus();
@@ -319,10 +287,6 @@ function initForgotPassword() {
   });
 }
 
-/* ---------------------------------------------------------------------- */
-/* Route guarding                                                          */
-/* ---------------------------------------------------------------------- */
-
 function initAuthRouting() {
   onAuthStateChanged(auth, (user) => {
     if (user && currentPageIsAuth()) {
@@ -334,19 +298,11 @@ function initAuthRouting() {
       return;
     }
 
-    // Reveal the page once we know the visitor belongs here. Both
-    // index.html and dashboard.html start with `data-auth-ready="false"`
-    // on <body> plus a full-page loading overlay, to avoid a flash of the
-    // wrong screen while Firebase resolves the session.
     document.body.setAttribute("data-auth-ready", "true");
     const overlay = document.getElementById("route-loading-overlay");
     if (overlay) overlay.classList.add("hidden");
   });
 }
-
-/* ---------------------------------------------------------------------- */
-/* Init                                                                     */
-/* ---------------------------------------------------------------------- */
 
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();

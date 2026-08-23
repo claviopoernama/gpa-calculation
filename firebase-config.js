@@ -9,10 +9,7 @@ function resolveConfig() {
 
   if (!config) {
     throw new Error(
-      "Firebase config is missing. Define window.__FIREBASE_CONFIG__ with " +
-        "your Firebase project's web app credentials before loading " +
-        "firebase-config.js (see the <script> block at the top of " +
-        "index.html or dashboard.html)."
+      "Firebase config is missing. Define window.__FIREBASE_CONFIG__ with your Firebase project's web app credentials before loading firebase-config.js."
     );
   }
 
@@ -23,9 +20,7 @@ function resolveConfig() {
 
   if (missing.length > 0) {
     console.warn(
-      "[firebase-config] The following Firebase config values look like " +
-        "placeholders and should be replaced with real credentials from " +
-        "the Firebase console (Project settings → General → Your apps): " +
+      "[firebase-config] The following Firebase config values look like placeholders and should be replaced with real credentials from the Firebase console: " +
         missing.join(", ")
     );
   }
@@ -35,9 +30,6 @@ function resolveConfig() {
 
 const firebaseConfig = resolveConfig();
 
-// Guard against re-initializing the app if this module is somehow
-// evaluated more than once (e.g. during local development with certain
-// live-reload setups).
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
